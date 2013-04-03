@@ -1,0 +1,99 @@
+28-March-2013
+Advanced linux programing:
+chapter 4: Thread
+Signal handling
+* Because each thread is a separate process, and because a signal is delivered to a particular process, there is no ambiguity about which thread receives the signal.
+* signals sent from outside the program are sent to the process corresponding to the main thread of the program.
+
+The clone System Call
+
+Processes Vs. Threads
+* All threads in a program must run the same executable.child process, on the other hand, may run a different executable by calling an exec function.
+* An errant thread can harm other threads in the same process because threads share the same virtual memory space and other resources. For instance, a wild memory write through an uninitialized pointer in one thread can corrupt memory visible to another thread. An errant process, on the other hand, cannot do so because each process has a copy of the program’s memory space.
+* Copying memory for a new process adds an additional performance overhead relative to creating a new thread. However, the copy is performed only when the memory is changed, so the penalty is minimal if the child process only reads memory.
+* Threads should be used for programs that need fine-grained parallelism. For example, if a problem can be broken into multiple, nearly identical tasks, threads may be a good choice. Processes should be used for programs that need coarser parallelism.
+* Sharing data among threads is trivial because threads share the same memory. (However, great care must be taken to avoid race conditions, as described previously.) Sharing data among processes requires the use of IPC mechanisms, as described in Chapter 5.This can be more cumbersome but makes multiple processes less likely to suffer from concurrency bugs. 
+*
+*
+
+***Interprocess communivation***
+
+* Interprocess communication (IPC) is the transfer of data among processes.
+* To use a shared memory segment, one process must allocate the segment.Then each
+process desiring to access the segment must attach the segment. After finishing its use
+of the segment, each process detaches the segment. At some point, one process must
+deallocate the segment.
+*
+Allocation:
+is dont using shmget() - 
+	- first parameter: integer key that specifies which segment to create. Unrelated processes can access the same shared segment by specifying the same key value.
+	- second parameter: number of bytes in the segment
+	- third parameter: is the bitwise or of flag values that specify options to shmget. IPC_CREAT, IPC_EXCL, Mode flafs.
+ex: 
+		int segment_id = shmget (shm_key, getpagesize (),IPC_CREAT | S_IRUSR | S_IWUSER);
+If the call succeeds, shmget returns a segment identifier.		
+
+Attachment and Detachment:
+* attachment is done using shmat()
+	-	first parameter: shared memory segment identifier SHMID returned by shmget.
+	-	second parameter: is a pointer that specifies where in your process’s address space you want to map the shared memory; if you specify NULL, Linux will choose an available address. 
+	-	third argument: SHM_RND or SHM_RDONLY
+*detach - using shmdt
+	-	first paramater: Pass it the address returned by shmat.
+Controlling and Deallocating:
+shmctl()
+	call returns information about a shared memory segment and can modify it
+	-	first paramater: is a shared memory segment identifier.
+	-	To obtain information about a shared memory segment, pass IPC_STAT as the second argument and a pointer to a struct shmid_ds.
+	-	To remove a segment, pass IPC_RMID as the second argument, and pass NULL as the third argument. The segment is removed when the last process that has attached it finally detaches it.
+	- Each shared memory segment should be explicitly deallocated using shmctl when you’re finished with it, to avoid violating the systemwide limit on the total number of shared memory segments. Invoking exit and exec detaches memory segments but does not deallocate them.
+
+*
+Example program:
+#include <stdio.h>
+#include <sys/shm.h>
+#include <sys/stat.h>
+int main ()
+{
+	int segment_id;
+	char* shared_memory;
+	struct shmid_ds shmbuffer;
+	int segment_size;
+	const int shared_segment_size = 0x6400;
+	/* Allocate a shared memory segment. */
+	segment_id = shmget (IPC_PRIVATE, shared_segment_size,	IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+	/* Attach the shared memory segment. */
+	shared_memory = (char*) shmat (segment_id, 0, 0);
+	printf ("shared memory attached at address %p\n", shared_memory);
+	/* Determine the segment’s size. */
+	shmctl (segment_id, IPC_STAT, &shmbuffer);
+	segment_size = shmbuffer.shm_segsz;
+	printf ("segment size: %d\n", segment_size);
+	/* Write a string to the shared memory segment. */
+	sprintf (shared_memory, "Hello, world.");
+	/* Detach the shared memory segment. */
+	shmdt (shared_memory);
+	/* Reattach the shared memory segment, at a different address. */
+	shared_memory = (char*) shmat (segment_id, (void*) 0x5000000, 0);
+	printf ("shared memory reattached at address %p\n", shared_memory);
+	/* Print out the string from shared memory. */
+	printf ("%s\n", shared_memory);
+	/* Detach the shared memory segment. */
+	shmdt (shared_memory);
+	/* Deallocate the shared memory segment. */
+	shmctl (segment_id, IPC_RMID, 0);
+	return 0;
+}
+*Pros n Cons
+	-	Shared memory segments permit fast bidirectional communication among any number of processes.
+	-	Each user can both read and write, but a program must establish and follow some protocol for preventing race conditions such as overwriting information before it is read
+*
+Semephores:
+Thread semaphores are counters that permit synchronizing multiple threads.
+Linux provides a distinct alternate implementation of semaphores that can be used for synchronizing processes (called process semaphores or sometimes System V semaphores).
+
+1. Allocation and Deallocation:
+The calls semget and semctl allocate and deallocate semaphores.
+Semaphores continue to exist even after all processes using them have terminated. The last process to use a semaphore set must explicitly remove it to ensure that the operating system does not run out of semaphores.
+
+
