@@ -1,0 +1,19 @@
+Initializing Semaphores
+to initialise semphore use semctl(). 
+	-	1st arg:  
+	-	2nd arg:	0
+	-	3rd arg:	SETALL
+	-	4th	arg:	create a union semun on and point its array field at an array of unsigned short values.
+semctl (semid, 0, SETALL, argument);
+union semun {
+int val;
+struct semid_ds *buf;
+unsigned short int *array;
+struct seminfo *__buf;
+};
+
+union semun argument;
+
+
+Wait and Post Operations
+Each semaphore has a non-negative value and supports wait and post operations.
